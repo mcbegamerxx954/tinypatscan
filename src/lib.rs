@@ -1,4 +1,4 @@
-#![cfg_attr(not(feature = "std"), no_std)]
+//#![cfg_attr(not(feature = "std"), no_std)]
 #[cfg(feature = "simd")]
 use wide::u8x16;
 /// A byte pattern.
@@ -7,6 +7,7 @@ use wide::u8x16;
 pub struct Pattern<const SIZE: usize> {
     data: [u8; SIZE],
     mask: [u8; SIZE],
+    pattern_i: usize,
 }
 
 macro_rules! const_unwrap {
@@ -24,6 +25,10 @@ impl<const SIZE: usize> Pattern<SIZE> {
     ///
     /// Failing to choose the correct pattern size will result in a compiletime error in a const context
     pub const fn from_str(sus: &str) -> Self {
+        assert!(
+            SIZE > get_pattern_size(sus),
+            "The const pattern size is wrong, use get_pattern_size to get it"
+        );
         let mut data = [0u8; SIZE];
         let mut mask = [u8::MAX; SIZE];
         let mut i = 0;
@@ -71,13 +76,18 @@ impl<const SIZE: usize> Pattern<SIZE> {
                 data[pattern_i] = parsed;
             }
         }
-        Self { data, mask }
+        Self {
+            data,
+            mask,
+            pattern_i,
+        }
     }
 
     /// Search pattern inside bytes
     pub fn search(&self, bytes: &[u8]) -> Option<usize> {
-        'search: for (i, slice) in bytes.windows(SIZE).enumerate() {
-            'compare: for index in 0..SIZE {
+        assert!(self.pattern_i <= SIZE);
+        'search: for (i, slice) in bytes.windows(self.pattern_i).enumerate() {
+            'compare: for index in 0..self.pattern_i {
                 if self.mask[index] == u8::MAX {
                     continue 'compare;
                 }
@@ -90,23 +100,30 @@ impl<const SIZE: usize> Pattern<SIZE> {
         None
     }
     /// Search pattern inside bytes with SIMD
+    #[inline(never)]
     #[cfg(feature = "simd")]
     pub fn simd_search(&self, bytes: &[u8]) -> Option<usize> {
-        'search: for (i, slice) in bytes.windows(SIZE).enumerate() {
+        assert!(self.pattern_i <= SIZE);
+        let mut pattern_chunks = self.data[..self.pattern_i + 1].chunks_exact(16);
+        let mut mask_chunks = self.mask[..self.pattern_i + 1].chunks_exact(16);
+        'search: for (i, slice) in bytes.windows(self.pattern_i + 1).enumerate() {
             let slice_chunks = slice.chunks_exact(16);
-            let mut pattern_chunks = self.data.chunks_exact(16);
-            let mut mask_chunks = self.mask.chunks_exact(16);
+            let mut pchunks = pattern_chunks.clone();
+            let mut mchunks = mask_chunks.clone();
             for chunk in slice_chunks {
                 let chunk = u8x16::new(chunk.try_into().unwrap());
-                let pattern_chunk = u8x16::new(pattern_chunks.next()?.try_into().unwrap());
-                let mask_chunk = u8x16::new(mask_chunks.next()?.try_into().unwrap());
+                let pattern_chunk = u8x16::new(pchunks.next()?.try_into().unwrap());
+                let mask_chunk = u8x16::new(mchunks.next()?.try_into().unwrap());
                 let masked = chunk & mask_chunk;
                 if masked != pattern_chunk {
                     continue 'search;
                 }
             }
-            let rem_start = slice.len() - slice.chunks_exact(16).remainder().len();
-            'remainder: for (i, byte) in slice.chunks_exact(16).remainder().iter().enumerate() {
+            // println!("got to rem");
+            let rem_chunk = slice.chunks_exact(16).remainder();
+            let rem_start = slice.len() - rem_chunk.len();
+            assert!(rem_chunk.len() + rem_start <= SIZE);
+            'remainder: for (i, byte) in rem_chunk.iter().enumerate() {
                 if self.mask[rem_start + i] == u8::MAX {
                     continue 'remainder;
                 }
@@ -121,13 +138,14 @@ impl<const SIZE: usize> Pattern<SIZE> {
     /// Search pattern inside bytes with multiple threads
     #[cfg(feature = "multithreading")]
     pub fn par_search(&self, bytes: &[u8]) -> Option<usize> {
+        assert!(self.pattern_i <= SIZE);
         use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
         use rayon::slice::ParallelSlice;
         let gah = bytes
-            .par_windows(SIZE)
+            .par_windows(self.pattern_i)
             .enumerate()
             .map(|(i, slice)| {
-                'compare: for index in 0..SIZE {
+                'compare: for index in 0..self.pattern_i {
                     if self.mask[index] == u8::MAX {
                         continue 'compare;
                     }
@@ -140,4 +158,20 @@ impl<const SIZE: usize> Pattern<SIZE> {
             .find_any(|e| e.is_some());
         gah.flatten()
     }
+}
+const fn get_pattern_size(pattern: &str) -> usize {
+    let mut i = 0;
+    let mut non_whitespace = true;
+    let mut pattern_len = 0;
+    let chars = pattern.as_bytes();
+    while i < pattern.len() {
+        if chars[i] == b' ' && non_whitespace {
+            pattern_len += 1;
+            non_whitespace = false;
+        } else if chars[i] != b' ' {
+            non_whitespace = true;
+        }
+        i += 1;
+    }
+    pattern_len + 1
 }
