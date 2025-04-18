@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+// use const_format::concatcp;
 #[cfg(feature = "simd")]
 use wide::u8x16;
 /// A byte pattern.
@@ -74,6 +75,7 @@ impl<const SIZE: usize> Pattern<SIZE> {
                 let duo_str = const_unwrap!(core::str::from_utf8(&hexbytes), "not utf8");
                 let parsed = const_unwrap!(u8::from_str_radix(duo_str, 16), "Bad pattern");
                 data[pattern_i] = parsed;
+                pattern_i += 1;
             }
         }
         Self {
@@ -104,9 +106,9 @@ impl<const SIZE: usize> Pattern<SIZE> {
     #[cfg(feature = "simd")]
     pub fn simd_search(&self, bytes: &[u8]) -> Option<usize> {
         assert!(self.pattern_i <= SIZE);
-        let mut pattern_chunks = self.data[..self.pattern_i + 1].chunks_exact(16);
-        let mut mask_chunks = self.mask[..self.pattern_i + 1].chunks_exact(16);
-        'search: for (i, slice) in bytes.windows(self.pattern_i + 1).enumerate() {
+        let mut pattern_chunks = self.data[..self.pattern_i].chunks_exact(16);
+        let mut mask_chunks = self.mask[..self.pattern_i].chunks_exact(16);
+        'search: for (i, slice) in bytes.windows(self.pattern_i).enumerate() {
             let slice_chunks = slice.chunks_exact(16);
             let mut pchunks = pattern_chunks.clone();
             let mut mchunks = mask_chunks.clone();
