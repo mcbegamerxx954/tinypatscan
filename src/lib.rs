@@ -90,7 +90,7 @@ impl<const SIZE: usize> Pattern<SIZE> {
         assert!(self.pattern_i <= SIZE);
         'search: for (i, slice) in bytes.windows(self.pattern_i).enumerate() {
             'compare: for index in 0..self.pattern_i {
-                if self.mask[index] == u8::MAX {
+                if self.mask[index] == 0 {
                     continue 'compare;
                 }
                 if self.data[index] != slice[index] {
@@ -148,7 +148,7 @@ impl<const SIZE: usize> Pattern<SIZE> {
             .enumerate()
             .map(|(i, slice)| {
                 'compare: for index in 0..self.pattern_i {
-                    if self.mask[index] == u8::MAX {
+                    if self.mask[index] == 0 {
                         continue 'compare;
                     }
                     if self.data[index] != slice[index] {
@@ -176,4 +176,27 @@ const fn get_pattern_size(pattern: &str) -> usize {
         i += 1;
     }
     pattern_len + 1
+}
+#[cfg(test)]
+//const MCLIB: &[u8] = include_bytes!("libminecraftpe.so");
+#[cfg(test)]
+const pat: Pattern<65> = Pattern::from_str(
+    "?? ?? ?? D1 ?? ?? ?? A9 ?? ?? ?? 91 ?? ?? ?? A9 ?? ?? ?? A9 ?? ?? ?? A9 ?? ?? ?? D5 F5 03 03 2A ?? ?? ?? F9 F6 03 02 2A F3 03 01 AA F4 03 00 AA ?? ?? ?? F8 ?? ?? ?? F9 ?? ?? ?? B4 9F 00 08 EB",
+);
+#[cfg(test)]
+extern crate std;
+#[test]
+fn scalar() {
+    let sus = std::fs::read("libminecraftpe.so").unwrap();
+    assert_eq!(pat.search(&sus).unwrap(), 100932284);
+}
+#[test]
+fn simd() {
+    let sus = std::fs::read("libminecraftpe.so").unwrap();
+    assert_eq!(pat.simd_search(&sus).unwrap(), 100932284);
+}
+#[test]
+fn mt() {
+    let sus = std::fs::read("libminecraftpe.so").unwrap();
+    assert_eq!(pat.par_search(&sus).unwrap(), 100932284);
 }
