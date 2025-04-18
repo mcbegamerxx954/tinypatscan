@@ -6,4 +6,4 @@ A very small pattern scanner that has the following features:
 - Multithreaded searching
 - Scalar searching
 
-This crate is mostly made for const patterns 
+This crate is mostly made for constant patterns as handling those is more efficient
