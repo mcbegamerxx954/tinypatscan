@@ -9,6 +9,7 @@ pub struct Pattern<const SIZE: usize> {
     data: [u8; SIZE],
     mask: [u8; SIZE],
     pattern_i: usize,
+    no_mask: bool,
 }
 
 macro_rules! const_unwrap {
@@ -36,6 +37,7 @@ impl<const SIZE: usize> Pattern<SIZE> {
         let mut pattern_i = 0;
         let mut hexbytes = [0u8; 2];
         let mut found_huh = false;
+        let mut no_mask = true;
         while i < sus.len() {
             let char = sus.as_bytes()[i];
             match char {
@@ -58,6 +60,7 @@ impl<const SIZE: usize> Pattern<SIZE> {
                         pattern_i += 1;
                     }
                     found_huh = true;
+                    no_mask = false;
                 }
                 char @ _ => {
                     let index = if hexbytes[0] != 0 { 1 } else { 0 };
@@ -82,12 +85,17 @@ impl<const SIZE: usize> Pattern<SIZE> {
             data,
             mask,
             pattern_i,
+            no_mask,
         }
     }
 
     /// Search pattern inside bytes
     pub fn search(&self, bytes: &[u8]) -> Option<usize> {
         assert!(self.pattern_i <= SIZE);
+        #[cfg(feature = "memchr")]
+        if self.no_mask {
+            return memchr::memmem::find(bytes, &self.data[..self.pattern_i]);
+        }
         'search: for (i, slice) in bytes.windows(self.pattern_i).enumerate() {
             'compare: for index in 0..self.pattern_i {
                 if self.mask[index] == 0 {
@@ -101,11 +109,16 @@ impl<const SIZE: usize> Pattern<SIZE> {
         }
         None
     }
+
     /// Search pattern inside bytes with SIMD
     #[inline(never)]
     #[cfg(feature = "simd")]
     pub fn simd_search(&self, bytes: &[u8]) -> Option<usize> {
         assert!(self.pattern_i <= SIZE);
+        #[cfg(feature = "memchr")]
+        if self.no_mask {
+            return memchr::memmem::find(bytes, &self.data[..self.pattern_i]);
+        }
         let mut pattern_chunks = self.data[..self.pattern_i].chunks_exact(16);
         let mut mask_chunks = self.mask[..self.pattern_i].chunks_exact(16);
         'search: for (i, slice) in bytes.windows(self.pattern_i).enumerate() {
@@ -141,6 +154,10 @@ impl<const SIZE: usize> Pattern<SIZE> {
     #[cfg(feature = "multithreading")]
     pub fn par_search(&self, bytes: &[u8]) -> Option<usize> {
         assert!(self.pattern_i <= SIZE);
+        #[cfg(feature = "memchr")]
+        if self.no_mask {
+            return memchr::memmem::find(bytes, &self.data[..self.pattern_i]);
+        }
         use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
         use rayon::slice::ParallelSlice;
         let gah = bytes
@@ -161,6 +178,7 @@ impl<const SIZE: usize> Pattern<SIZE> {
         gah.flatten()
     }
 }
+
 const fn get_pattern_size(pattern: &str) -> usize {
     let mut i = 0;
     let mut non_whitespace = true;

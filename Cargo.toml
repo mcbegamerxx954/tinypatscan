@@ -4,11 +4,14 @@ version = "0.1.1"
 edition = "2024"
 
 [dependencies]
+memchr = { version = "2.7.4", default-features = false , optional = true}
 rayon = {version = "1.10.0", optional = true }
 wide = { version = "0.7.32", optional = true, default-features = false }
 
 [features]
 multithreading = ["dep:rayon", "std"]
+# Use this in place of our algorithms in case these is no mask
+memchr = ["dep:memchr"]
 simd = ["dep:wide"]
 std = []
-default = ["simd"]
+default = ["simd", "memchr"]
