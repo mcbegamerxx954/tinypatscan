@@ -3,6 +3,12 @@
 version = 4
 
 [[package]]
+name = "bndm"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4407cef280d9288756ea8412bf0c4bdef9b68a9a4942248b3485be9047ea0007"
+
+[[package]]
 name = "bytemuck"
 version = "1.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -78,6 +84,7 @@ dependencies = [
 name = "tinypatscan"
 version = "0.1.1"
 dependencies = [
+ "bndm",
  "memchr",
  "rayon",
  "wide",

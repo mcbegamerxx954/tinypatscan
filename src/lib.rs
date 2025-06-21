@@ -139,7 +139,7 @@ impl<const SIZE: usize> Pattern<SIZE> {
             let rem_start = slice.len() - rem_chunk.len();
             assert!(rem_chunk.len() + rem_start <= SIZE);
             'remainder: for (i, byte) in rem_chunk.iter().enumerate() {
-                if self.mask[rem_start + i] == u8::MAX {
+                if self.mask[rem_start + i] == 0 {
                     continue 'remainder;
                 }
                 if self.data[rem_start + i] != *byte {
